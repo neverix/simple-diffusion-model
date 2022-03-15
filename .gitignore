@@ -127,3 +127,12 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# W&B
+wandb/
+
+Pipfile*
+data/
+
+.idea/
+

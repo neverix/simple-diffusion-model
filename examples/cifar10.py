@@ -1,6 +1,7 @@
 # This code was adapted from lucidrains existing `x-transformers` repository.
 from simple_diffusion_model import Model
 from simple_diffusion_model import DiffusionWrapper
+from simple_diffusion_model import EMAWrapper
 
 import tqdm
 import time
@@ -24,14 +25,14 @@ GRADIENT_ACCUMULATE_EVERY = 4
 LEARNING_RATE = 1e-4
 VALIDATE_EVERY  = 100
 GENERATE_EVERY  = 500
-EVALUATE = False
-EVALUATE_EVERY  = 100000
+EVALUATE = True
+EVALUATE_EVERY  = 5_000
 EVALUATE_BATCH_SIZE = 50
 
 # helpers
 
 def cycle(loader):
-    while True:
+    while True: 
         for data in loader:
             yield data
 
@@ -53,13 +54,14 @@ class FidelityWrapper(nn.Module):
 def train():
     wandb.init(project="simple-diffusion-model")
 
-    model = DiffusionWrapper(Model(), input_shape=(3, 32, 32))
+    ema = EMAWrapper(Model())
+    model = DiffusionWrapper(ema, input_shape=(3, 32, 32))
     model.cuda()
 
     train_dataset = CIFAR10(root='./data', train=True, transform=transforms.ToTensor(), download=True)
     val_dataset = CIFAR10(root='./data', train=False, transform=transforms.ToTensor(), download=True)
-    train_loader  = cycle(DataLoader(train_dataset, batch_size = BATCH_SIZE))
-    val_loader    = cycle(DataLoader(val_dataset, batch_size = BATCH_SIZE))
+    train_loader = cycle(DataLoader(train_dataset, batch_size=BATCH_SIZE))
+    val_loader = cycle(DataLoader(val_dataset, batch_size=BATCH_SIZE))
 
     # optimizer
 
@@ -82,7 +84,7 @@ def train():
         torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
         optim.step()
         optim.zero_grad()
-
+        ema.step()
 
         if i % VALIDATE_EVERY == 0:
             model.eval()
@@ -119,7 +121,7 @@ def train():
                     wrapped = torch_fidelity.GenerativeModelModuleWrapper(wrapped_inner,
                                                                           1, 'normal', 0)
                     metrics = torch_fidelity.calculate_metrics(input1=wrapped,
-                                                               input1_model_num_samples=10000,
+                                                               input1_model_num_samples=100,
                                                                input2='cifar10-train',
                                                                batch_size=EVALUATE_BATCH_SIZE,
                                                                fid=True,
